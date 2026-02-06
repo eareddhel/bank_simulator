@@ -1,0 +1,14 @@
+/* estilos generales para el simulador de banco */
+body {
+  background-color: #f4f7f6;
+}
+
+.card {
+  border: none;
+  border-radius: 12px;
+}
+
+.card-header {
+  border-radius: 12px 12px 0 0 !important;
+  font-weight: bold;
+}
