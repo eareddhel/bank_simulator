@@ -1,22 +1,169 @@
 <?php
-session_start();
-// simulando captura de datos de un carrito o pago
-$_SESSION['monto_pago'] = $_POST['monto'];
-$_SESSION['id_transaccion'] = "TX-" . rand(1000, 9999);
+/**
+ * SIMULADOR BANCARIO - Checkout
+ * 
+ * Este archivo prepara la transacción y redirige al simulador bancario correspondiente.
+ * Simula exactamente el flujo que harías con las APIs reales de cada proveedor de pago.
+ * 
+ * En tu aplicación real:
+ * - Aquí crearías la transacción en la API del proveedor
+ * - Obtendrías un token o URL de pago
+ * - Redirigirías al usuario al portal del banco
+ */
 
-// redirigir al simulador mediante un formulario oculto para mantener el uso de POST
+session_start();
+
+// Validar que vengan los datos necesarios
+if (!isset($_POST['payment_method']) || !isset($_POST['amount'])) {
+    die('Error: Datos de pago incompletos');
+}
+
+// Capturar datos de la transacción
+$paymentMethod = $_POST['payment_method'];
+$amount = $_POST['amount'];
+$orderId = $_POST['order_id'] ?? 'ORD-' . time();
+$description = $_POST['description'] ?? 'Compra en tienda';
+
+// Generar un ID de transacción único
+$transactionId = strtoupper(uniqid('TXN-'));
+
+// Guardar datos en sesión (en producción esto iría a base de datos)
+$_SESSION['pending_transaction'] = [
+    'transaction_id' => $transactionId,
+    'payment_method' => $paymentMethod,
+    'amount' => $amount,
+    'order_id' => $orderId,
+    'description' => $description,
+    'timestamp' => time(),
+    'return_url' => 'http://localhost/bank_simulator/callback.php', // Tu URL real aquí
+];
+
+// Generar token de sesión seguro (en producción usarías un hash criptográfico)
+$token = hash('sha256', $transactionId . session_id() . time());
+$_SESSION['transaction_token'] = $token;
+
+// Preparar parámetros específicos según el método de pago
+switch ($paymentMethod) {
+    case 'webpay':
+        // Webpay Plus (Transbank) - Parámetros reales
+        $params = [
+            'TBK_TOKEN' => $token,
+            'TBK_ID_SESION' => session_id(),
+            'TBK_ORDEN_COMPRA' => $orderId,
+            'TBK_MONTO' => $amount,
+            'payment_method' => 'webpay',
+        ];
+        break;
+    
+    case 'mercadopago':
+        // Mercado Pago - Parámetros reales
+        $params = [
+            'preference_id' => 'MP-' . $transactionId,
+            'external_reference' => $orderId,
+            'init_point' => 'simulator',
+            'amount' => $amount,
+            'payment_method' => 'mercadopago',
+        ];
+        break;
+    
+    case 'paypal':
+        // PayPal - Parámetros reales
+        $params = [
+            'token' => 'EC-' . substr($token, 0, 17),
+            'order_id' => $orderId,
+            'amount' => $amount,
+            'currency' => 'CLP',
+            'payment_method' => 'paypal',
+        ];
+        break;
+    
+    case 'bank_transfer':
+        // Transferencia bancaria genérica
+        $params = [
+            'reference' => $transactionId,
+            'order_id' => $orderId,
+            'amount' => $amount,
+            'payment_method' => 'bank_transfer',
+        ];
+        break;
+    
+    default:
+        die('Método de pago no soportado');
+}
+
+// Agregar URL de retorno
+$params['return_url'] = $_SESSION['pending_transaction']['return_url'];
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Redirigiendo al Banco...</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirigiendo al Portal de Pago...</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .loader {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
-<body onload="document.forms['bank_form'].submit();">
-  <form name="bank_form" action="simulador.php" method="POST">
-    <input type="hidden" name="token" value="<?php echo session_id(); ?>">
-    <input type="hidden" name="amount" value="<?php echo $_SESSION['monto_pago']; ?>">
-    <input type="hidden" name="callback_url" value="https://banksimulator.pwa/callback.php">
-  </form>
+<body onload="document.getElementById('bank_form').submit();">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card shadow-lg">
+                    <div class="card-body text-center p-5">
+                        <div class="loader mx-auto mb-4"></div>
+                        <h4 class="mb-3">Redirigiendo al Portal de Pago Seguro</h4>
+                        <p class="text-muted mb-4">
+                            <i class="bi bi-shield-lock-fill text-success"></i>
+                            Conexión segura establecida
+                        </p>
+                        <div class="alert alert-info">
+                            <small>
+                                <strong>Método:</strong> <?php echo ucfirst($paymentMethod); ?><br>
+                                <strong>Monto:</strong> $<?php echo number_format($amount, 0, ',', '.'); ?> CLP<br>
+                                <strong>Orden:</strong> <?php echo $orderId; ?>
+                            </small>
+                        </div>
+                        <p class="small text-muted">
+                            No cierres esta ventana. Serás redirigido automáticamente...
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulario automático de redirección -->
+    <form id="bank_form" action="simulator.php" method="POST" style="display: none;">
+        <?php foreach ($params as $key => $value): ?>
+            <input type="hidden" name="<?php echo htmlspecialchars($key); ?>" value="<?php echo htmlspecialchars($value); ?>">
+        <?php endforeach; ?>
+    </form>
+
+    <script>
+        // Timeout de seguridad por si no se envía automáticamente
+        setTimeout(function() {
+            document.getElementById('bank_form').submit();
+        }, 2000);
+    </script>
 </body>
 </html>
