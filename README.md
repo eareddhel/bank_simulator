@@ -942,5 +942,5 @@ Si este proyecto te fue útil, ¡dale una ⭐ en GitHub!
 
 **Última actualización**: 7 de febrero de 2026  
 **Versión**: 1.0.0  
-**Autor**: Roberto Tapia/ Regline  
+**Autor**: Regline.cl 
 **Licencia**: MIT
